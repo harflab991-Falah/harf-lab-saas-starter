@@ -69,7 +69,7 @@ export default function App() {
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/track/:id" element={<TrackOrderPage />} />
         <Route path="/app" element={<ProtectedRoute><ClientDashboardPage /></ProtectedRoute>} />
-        <Route path="/app/orders/new" element={<ProtectedRoute><NewOrderPage /></ProtectedRoute>} />
+        <Route path="/app/orders/new" element={<NewOrderPage />} />
         <Route path="/app/orders/:id" element={<ProtectedRoute><OrderDetailsPage /></ProtectedRoute>} />
         <Route
   path="/admin"
