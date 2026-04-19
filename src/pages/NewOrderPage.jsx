@@ -1,73 +1,158 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createOrder, getServices, uploadOrderFile } from '../lib/api'
-import { useAuth } from '../components/AuthContext'
+import { createOrder, getServices } from '../lib/api'
 
 export default function NewOrderPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
   const [services, setServices] = useState([])
-  const [form, setForm] = useState({ service_id: '', title: '', description: '', size: '', style: '' })
+  const [form, setForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    service_id: '',
+    title: '',
+    description: '',
+    size: '',
+    style: '',
+  })
   const [error, setError] = useState('')
-  const [file, setFile] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    getServices().then(({ data }) => setServices(data || []))
+    async function loadServices() {
+      const { data, error } = await getServices()
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setServices(data || [])
+    }
+
+    loadServices()
   }, [])
+
+  function updateField(name, value) {
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
-    const selected = services.find((s) => s.id === form.service_id)
-    const payload = {
-      client_id: user.id,
-      service_id: form.service_id || null,
-      title: form.title,
-      description: form.description,
-      size: form.size,
-      style: form.style,
-      price: selected?.base_price ?? null,
-      deadline_at: selected?.turnaround_hours ? new Date(Date.now() + selected.turnaround_hours * 3600 * 1000).toISOString() : null,
+
+    if (!form.customer_name.trim()) {
+      setError('يرجى إدخال اسم العميل')
+      return
     }
+
+    if (!form.customer_phone.trim()) {
+      setError('يرجى إدخال رقم الجوال')
+      return
+    }
+
+    if (!form.service_id) {
+      setError('يرجى اختيار الخدمة')
+      return
+    }
+
+    if (!form.title.trim()) {
+      setError('يرجى إدخال عنوان الطلب')
+      return
+    }
+
+    const selectedService = services.find((service) => service.id === form.service_id)
+
+    const payload = {
+      service_id: form.service_id || null,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      size: form.size.trim(),
+      style: form.style.trim(),
+      customer_name: form.customer_name.trim(),
+      customer_phone: form.customer_phone.trim(),
+      price: selectedService?.base_price ?? null,
+      deadline_at: selectedService?.turnaround_hours
+        ? new Date(Date.now() + selectedService.turnaround_hours * 3600 * 1000).toISOString()
+        : null,
+      status: 'new',
+    }
+
+    setSubmitting(true)
+
     const { data, error } = await createOrder(payload)
-if (error) return setError(error.message)
 
-// إذا اختار المستخدم ملفًا، ارفعه بعد إنشاء الطلب
-if (file && data) {
-  const uploadResult = await uploadOrderFile({
-    orderId: data.id,
-    file,
-    userId: user.id
-  })
+    setSubmitting(false)
 
-  if (uploadResult.error) {
-    return setError(uploadResult.error.message)
-  }
-}
+    if (error) {
+      setError(error.message)
+      return
+    }
 
-navigate(`/app/orders/${data.id}`)
+    navigate(`/track/${data.id}`)
   }
 
   return (
     <main className="page narrow">
       <div className="card">
         <h2>إنشاء طلب جديد</h2>
+
         <form onSubmit={onSubmit} className="stack">
-          <select value={form.service_id} onChange={(e) => setForm({ ...form, service_id: e.target.value })}>
+          <input
+            placeholder="اسم العميل"
+            value={form.customer_name}
+            onChange={(e) => updateField('customer_name', e.target.value)}
+          />
+
+          <input
+            placeholder="رقم الجوال"
+            value={form.customer_phone}
+            onChange={(e) => updateField('customer_phone', e.target.value)}
+          />
+
+          <select
+            value={form.service_id}
+            onChange={(e) => updateField('service_id', e.target.value)}
+          >
             <option value="">اختر الخدمة</option>
             {services.map((service) => (
-              <option key={service.id} value={service.id}>{service.name} — {service.base_price ?? '—'} ر.س</option>
+              <option key={service.id} value={service.id}>
+                {service.name} — {service.base_price ?? '—'} ر.س
+              </option>
             ))}
           </select>
-          <input placeholder="عنوان الطلب" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          <textarea placeholder="وصف الطلب" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          <input placeholder="المقاس" value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} />
-          <input placeholder="الستايل" value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })} />
-<input
-  type="file"
-  onChange={(e) => setFile(e.target.files[0])}
-/>
-          <button className="primary">إرسال الطلب</button>
+
+          <input
+            placeholder="عنوان الطلب"
+            value={form.title}
+            onChange={(e) => updateField('title', e.target.value)}
+          />
+
+          <textarea
+            placeholder="وصف الطلب"
+            value={form.description}
+            onChange={(e) => updateField('description', e.target.value)}
+            rows={6}
+          />
+
+          <input
+            placeholder="المقاس"
+            value={form.size}
+            onChange={(e) => updateField('size', e.target.value)}
+          />
+
+          <input
+            placeholder="الستايل"
+            value={form.style}
+            onChange={(e) => updateField('style', e.target.value)}
+          />
+
+          <button className="primary" type="submit" disabled={submitting}>
+            {submitting ? 'جاري إرسال الطلب...' : 'إرسال الطلب'}
+          </button>
+
           {error ? <p className="error">{error}</p> : null}
         </form>
       </div>
