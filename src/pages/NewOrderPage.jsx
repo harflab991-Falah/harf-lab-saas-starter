@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createOrder, getServices } from '../lib/api'
+import { createOrder, getServices, uploadOrderFile } from '../lib/api'
 
 export default function NewOrderPage() {
   const navigate = useNavigate()
+
   const [services, setServices] = useState([])
   const [form, setForm] = useState({
     customer_name: '',
@@ -14,6 +15,7 @@ export default function NewOrderPage() {
     size: '',
     style: '',
   })
+  const [file, setFile] = useState(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -82,15 +84,32 @@ export default function NewOrderPage() {
 
     setSubmitting(true)
 
+    // 1) إنشاء الطلب
     const { data, error } = await createOrder(payload)
 
-    setSubmitting(false)
-
     if (error) {
+      setSubmitting(false)
       setError(error.message)
       return
     }
 
+    // 2) رفع الملف إذا وُجد
+    if (file && data) {
+      const uploadResult = await uploadOrderFile({
+        orderId: data.id,
+        file,
+      })
+
+      if (uploadResult.error) {
+        setSubmitting(false)
+        setError(uploadResult.error.message)
+        return
+      }
+    }
+
+    setSubmitting(false)
+
+    // 3) الانتقال إلى صفحة التتبع
     navigate(`/track/${data.id}`)
   }
 
@@ -147,6 +166,11 @@ export default function NewOrderPage() {
             placeholder="الستايل"
             value={form.style}
             onChange={(e) => updateField('style', e.target.value)}
+          />
+
+          <input
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
 
           <button className="primary" type="submit" disabled={submitting}>
